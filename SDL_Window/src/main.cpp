@@ -16,8 +16,12 @@ void err_vfatalf(const char* format, va_list args)
     fprintf(stderr, "Error: ");
     vfprintf(stderr, format, args);
     fprintf(stderr, "\n");
+#ifndef NDEBUG
+    int ch = getchar();
+#endif
     exit(1);
 }
+
 void err_fatalf(const char* format, ...)
 {
     va_list args;
@@ -85,12 +89,15 @@ int main(int, char**)
                 case SDLK_ESCAPE:
                     done = true;
                     break;
-                default: break;
+                default:
+                    break;
                 }
+                break;
             case SDL_QUIT:
                 done = true;
                 break;
-            default: break;
+            default:
+                break;
             }
         }
     }
