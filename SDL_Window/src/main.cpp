@@ -1,11 +1,12 @@
-#include <SDL.h>
-#include <GL/glew.h>
+#include <memory>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdio.h>
+
+#include <GL/glew.h> // GLEW must always come before glcorearb
 #include <glcorearb.h>
 #include <glm/glm.hpp>
-
-#include <stdio.h>
-#include <stdarg.h>
-#include <signal.h>
+#include <SDL.h>
 
 const int WINDOW_WIDTH = 640;
 const int WINDOW_HEIGHT = 480;
@@ -32,12 +33,17 @@ void err_checkSDL(const char* msg)
         err_fatalf("SDL: %s (%s)", msg, err);
 }
 
+#ifdef _WIN32
+int wmain(int, char**)
+#else
 int main(int, char**)
+#endif
 {
     GLenum glerr;
 
     SDL_Init(SDL_INIT_VIDEO);
     err_checkSDL("Unable to init SDL video");
+    atexit(SDL_Quit);
 
     /* SDL2 overrides SIGINT, so we restore it.
      * This allows us to use Ctrl+C to close the program. */
@@ -46,18 +52,17 @@ int main(int, char**)
     // Request an OpenGl 4.5 core profile context
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
-    SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
 
-    // Turn on double buffering with a 32bit Z buffer
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    //SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
-
-    SDL_Window* window = SDL_CreateWindow("SDL_Window Tutorial", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+    std::unique_ptr<SDL_Window, void(*)(SDL_Window *)> window(
+        SDL_CreateWindow("Hello World!", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL),
+        SDL_DestroyWindow);
     err_checkSDL("Unable to open SDL window");
 
-    SDL_GLContext glctx = SDL_GL_CreateContext(window);
+    std::unique_ptr<void, void(*)(void *)> context(
+        SDL_GL_CreateContext(window.get()),
+        SDL_GL_DeleteContext);
     err_checkSDL("Unable to create OpenGL context");
 
     glerr = glewInit();
@@ -88,12 +93,7 @@ int main(int, char**)
             default: break;
             }
         }
-
-        SDL_GL_SwapWindow(window);
     }
 
-    SDL_GL_DeleteContext(glctx);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
     return 0;
 }
