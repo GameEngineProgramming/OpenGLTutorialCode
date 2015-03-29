@@ -10,7 +10,7 @@ find_package(GLEW REQUIRED)
 find_package(OpenGL REQUIRED COMPONENTS GL)
 
 # find every source file in the `src` and `ext` directories
-file(GLOB_RECURSE sources src/*.c src/*.cpp ext/*.c ext/*.cpp)
+file(GLOB_RECURSE sources src/*.c src/*.cpp src/*.h src/*.hpp ext/*.c ext/*.cpp ext/*.h ext/*.hpp)
 
 include_directories(ext ${SDL2_INCLUDE_DIR} ${GLEW_INCLUDE_DIR} ${OPENGL_INCLUDE_DIR})
 
