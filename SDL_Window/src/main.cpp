@@ -43,8 +43,6 @@ int wmain(int, char**)
 int main(int, char**)
 #endif
 {
-    GLenum glerr;
-
     SDL_Init(SDL_INIT_VIDEO);
     err_checkSDL("Unable to init SDL video");
     atexit(SDL_Quit);
@@ -69,7 +67,8 @@ int main(int, char**)
         SDL_GL_DeleteContext);
     err_checkSDL("Unable to create OpenGL context");
 
-    glerr = glewInit();
+    glewExperimental = true; // Needed in core profile 
+    GLenum glerr = glewInit();
     if(glerr != GLEW_OK)
         err_fatalf("Failed to initialize GLEW: %s", glewGetErrorString(glerr));
     else if(!GLEW_VERSION_4_5)

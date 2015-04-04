@@ -1,30 +1,12 @@
 #include <string>
-#include <fstream>
+#include "Data.h"
 #include "ErrorHandling.h"
 #include "ShaderLoader.h"
 
-std::string loadFile(const char* filePath)
-{
-    if (filePath == nullptr || filePath[0] == 0)
-    {
-        return "";
-    }
-    // Read the Vertex Shader code from the file
-    std::string fileContents;
-    std::ifstream fileStream(filePath, std::ios::in);
-    if (fileStream.is_open())
-    {
-        std::string Line = "";
-        while (getline(fileStream, Line))
-            fileContents += "\n" + Line;
-        fileStream.close();
-    }
-
-    return fileContents;
-}
-
 GLuint CompileShader(const char* shaderSource, GLuint shaderType)
 {
+    err_checkGL("Before compiling shader");
+
     if (shaderSource[0] == 0) return 0;
     GLuint shaderId = glCreateShader(shaderType);
     glShaderSource(shaderId, 1, &shaderSource, NULL);
@@ -35,9 +17,14 @@ GLuint CompileShader(const char* shaderSource, GLuint shaderType)
 
     glGetShaderiv(shaderId, GL_COMPILE_STATUS, &Result);
     glGetShaderiv(shaderId, GL_INFO_LOG_LENGTH, &InfoLogLength);
-    std::string ErrorMessage(InfoLogLength <= 0 ? 1 : InfoLogLength, '\0');
-    glGetShaderInfoLog(shaderId, InfoLogLength, NULL, &ErrorMessage[0]);
-    fprintf(stdout, "%s\n", &ErrorMessage[0]);
+    std::string InfoLog(InfoLogLength <= 0 ? 1 : InfoLogLength, '\0');
+    glGetShaderInfoLog(shaderId, InfoLogLength, NULL, &InfoLog[0]);
+    if (Result == GL_TRUE) // compiler warnings
+        fprintf(stdout, "%s\n", &InfoLog[0]);
+    else // compiler errors
+        err_fatalf("%s\n", &InfoLog[0]);
+
+    err_checkGL("Compiling shader");
 
     return shaderId;
 }
@@ -78,11 +65,14 @@ GLuint LoadShaderProgramSource(const char* fragmentSource, const char* vertexSou
     GLuint program = LoadShaderProgram(fragmentShader, vertexShader);
     glDeleteShader(fragmentShader);
     glDeleteShader(vertexShader);
+    err_checkGL("Marking shader for deletion");
     return program;
 }
 
 GLuint LoadShaderProgram(GLuint fragmentShader, GLuint vertexShader)
 {
+    err_checkGL("Before linking shader program");
+
     GLuint ProgramId = glCreateProgram();
     glAttachShader(ProgramId, fragmentShader);
     glAttachShader(ProgramId, vertexShader);
@@ -93,9 +83,14 @@ GLuint LoadShaderProgram(GLuint fragmentShader, GLuint vertexShader)
 
     glGetProgramiv(ProgramId, GL_LINK_STATUS, &Result);
     glGetProgramiv(ProgramId, GL_INFO_LOG_LENGTH, &InfoLogLength);
-    std::string ProgramErrorMessage(InfoLogLength <= 0 ? 1 : InfoLogLength, '\0');
-    glGetProgramInfoLog(ProgramId, InfoLogLength, NULL, &ProgramErrorMessage[0]);
-    fprintf(stdout, "%s\n", &ProgramErrorMessage[0]);
+    std::string InfoLog(InfoLogLength <= 0 ? 1 : InfoLogLength, '\0');
+    glGetProgramInfoLog(ProgramId, InfoLogLength, NULL, &InfoLog[0]);
+    if (Result == GL_TRUE) // linker warnings
+        fprintf(stdout, "%s\n", &InfoLog[0]);
+    else // linker errors
+        err_fatalf("%s\n", &InfoLog[0]);
+
+    err_checkGL("Linking shader program");
 
     return ProgramId;
 }
