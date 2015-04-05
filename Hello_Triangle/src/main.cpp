@@ -19,6 +19,14 @@ typedef struct {
     GLuint baseInstance;
 } DrawArraysIndirectCommand;
 
+typedef struct {
+    GLuint count;
+    GLuint primCount;
+    GLuint firstIndex;
+    GLuint baseVertex;
+    GLuint baseInstance;
+} DrawElementsIndirectCommand;
+
 #ifdef _WIN32
 int wmain(int, char**)
 #else
@@ -89,7 +97,15 @@ int main(int, char**)
     glVertexArrayVertexBuffer(VertexArrayID, 0, vertexbuffer, 0 /* offset */, 3 * sizeof(GLfloat) /* stride */);
     err_checkGL("Loading Triangle");
 
-    static const DrawArraysIndirectCommand indirectCommand = {
+    GLuint indices[3] = { 0, 1, 2 };
+    // Generate a buffer for the indices
+    GLuint elementbuffer;
+    glCreateBuffers(1, &elementbuffer);
+    glNamedBufferData(elementbuffer, 3 * sizeof(GLuint), &indices[0], GL_STATIC_DRAW);
+    err_checkGL("Loading Element Buffer");
+
+
+    static const DrawArraysIndirectCommand arraysCommand = {
         3, // Three vertices in total, making one triangle
         1, // Draw one copy of this triangle
         0, // Starting vertex index
@@ -97,10 +113,24 @@ int main(int, char**)
     }; // same parameters as glDrawArraysInstancedBaseInstance
     assert(sizeof(DrawArraysIndirectCommand) == 16);
 
-    GLuint commandBuffer;
-    glCreateBuffers(1, &commandBuffer);
-    glNamedBufferData(commandBuffer, sizeof(DrawArraysIndirectCommand), &indirectCommand, GL_STATIC_DRAW);
-    err_checkGL("Loading Command Buffer");
+    GLuint arrayCommandBuffer;
+    glCreateBuffers(1, &arrayCommandBuffer);
+    glNamedBufferData(arrayCommandBuffer, sizeof(DrawArraysIndirectCommand), &arraysCommand, GL_STATIC_DRAW);
+
+    DrawElementsIndirectCommand elementsCommand = {
+        3, // count
+        1, // primcount
+        0, // firstIndex
+        0, // Specifies a constant that should be added to each element of indices when chosing elements from the enabled vertex arrays
+        0  // Number to start from for InstanceId
+    };
+    assert(sizeof(DrawElementsIndirectCommand) == 20);
+
+    GLuint elementCommandBuffer;
+    glCreateBuffers(1, &elementCommandBuffer);
+    glNamedBufferData(elementCommandBuffer, sizeof(DrawElementsIndirectCommand), &elementsCommand, GL_STATIC_DRAW);
+
+    err_checkGL("Loading Command Buffers");
 
     GLuint programID = LoadShaderProgramFile("basic.frag", "basic.vert");
 
@@ -108,63 +138,207 @@ int main(int, char**)
     bool done = false;
     enum DrawMethods
     {
-        GL_DRAW_ARRAYS = 0,
-        GL_DRAW_ARRAYS_INSTANCED = 1,
-        GL_DRAW_ARRAYS_INSTANCED_BASE_INSTANCE = 2,
-        GL_DRAW_ARRAYS_INDIRECT = 3,
-        GL_MULTI_DRAW_ARRAYS_INDIRECT = 4,
+        DrawArrays,
+        DrawArraysInstanced,
+        DrawArraysInstancedBaseInstance,
+        DrawArraysIndirect,
+        MultiDrawArraysIndirect,
+        DrawElements,
+        DrawElementsInstanced,
+        DrawElementsInstancedBaseVertex,
+        DrawElementsInstancedBaseInstance,
+        DrawElementsInstancedBaseVertexBaseInstance,
+        DrawElementsIndirect,
+        MultiDrawElementsIndirect,
+        DrawRangeElements,
+        DrawRangeElementsBaseVertex,
         MAX
     };
-    DrawMethods drawMethod = DrawMethods::GL_DRAW_ARRAYS_INSTANCED;
+    DrawMethods drawMethod = DrawMethods::DrawArrays;
     while(!done)
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(programID);
-        glBindVertexArray(VertexArrayID);
 
         switch (drawMethod)
         {
         case DrawMethods::MAX:
-        case DrawMethods::GL_DRAW_ARRAYS:
+        case DrawMethods::DrawArrays:
+            glBindVertexArray(VertexArrayID);
             glDrawArrays(
-                GL_TRIANGLES,
-                0, // Starting vertex index
-                3  // Three vertices in total, making one triangle
+                GL_TRIANGLES, // type of primitive to render
+                0,            // Starting vertex index
+                3             // Three vertices in total, making one triangle
                 );
             err_checkGL("Drawing Triangle via glDrawArrays");
-            drawMethod = DrawMethods::GL_DRAW_ARRAYS_INSTANCED;
+            drawMethod = DrawMethods::DrawArraysInstanced;
             break;
-        case DrawMethods::GL_DRAW_ARRAYS_INSTANCED:
+        case DrawMethods::DrawArraysInstanced:
+            glBindVertexArray(VertexArrayID);
             glDrawArraysInstanced(
-                GL_TRIANGLES,
-                0, // Starting vertex index
-                3, // Three vertices in total, making one triangle
-                1  // Draw one copy of this triangle
+                GL_TRIANGLES, // type of primitive to render
+                0,            // Starting vertex index
+                3,            // Three vertices in total, making one triangle
+                1             // Draw one copy of this triangle
                 );
             err_checkGL("Drawing Triangle via glDrawArraysInstanced");
-            drawMethod = DrawMethods::GL_DRAW_ARRAYS_INSTANCED_BASE_INSTANCE;
+            drawMethod = DrawMethods::DrawArraysInstancedBaseInstance;
             break;
-        case DrawMethods::GL_DRAW_ARRAYS_INSTANCED_BASE_INSTANCE:
+        case DrawMethods::DrawArraysInstancedBaseInstance:
+            glBindVertexArray(VertexArrayID);
             glDrawArraysInstancedBaseInstance(
-                GL_TRIANGLES,
-                0, // Starting vertex index
-                3, // Three vertices in total, making one triangle
-                1, // Draw one copy of this triangle
-                0  // Starting instance index
+                GL_TRIANGLES, // type of primitive to render
+                0,            // Starting vertex index
+                3,            // Three vertices in total, making one triangle
+                1,            // Draw one copy of this triangle
+                0             // Starting instance index
                 );
             err_checkGL("Drawing Triangle via glDrawArraysInstancedBaseInstance");
-            drawMethod = DrawMethods::GL_DRAW_ARRAYS_INDIRECT;
+            drawMethod = DrawMethods::DrawArraysIndirect;
             break;
-        case DrawMethods::GL_DRAW_ARRAYS_INDIRECT:
-            glBindBuffer(GL_DRAW_INDIRECT_BUFFER, commandBuffer);
-            glDrawArraysIndirect(GL_TRIANGLES, 0);
+        case DrawMethods::DrawArraysIndirect:
+            glBindVertexArray(VertexArrayID);
+            glBindBuffer(GL_DRAW_INDIRECT_BUFFER, arrayCommandBuffer);
+            glDrawArraysIndirect(
+                GL_TRIANGLES, // type of primitive to render
+                0             // offset in the GL_DRAW_INDIRECT_BUFFER to start at
+            );
             err_checkGL("Drawing Triangle via glDrawArraysIndirect");
-            drawMethod = DrawMethods::GL_MULTI_DRAW_ARRAYS_INDIRECT;
+            drawMethod = DrawMethods::MultiDrawArraysIndirect;
             break;
-        case DrawMethods::GL_MULTI_DRAW_ARRAYS_INDIRECT:
-            glBindBuffer(GL_DRAW_INDIRECT_BUFFER, commandBuffer);
-            glMultiDrawArraysIndirect(GL_TRIANGLES, 0, 1, 0);
+        case DrawMethods::MultiDrawArraysIndirect:
+            glBindVertexArray(VertexArrayID);
+            glBindBuffer(GL_DRAW_INDIRECT_BUFFER, arrayCommandBuffer);
+            glMultiDrawArraysIndirect(
+                GL_TRIANGLES,                     // type of primitive to render
+                0,                                // offset in the GL_DRAW_INDIRECT_BUFFER to start at
+                1,                                // how many command structures to render from the GL_DRAW_INDIRECT_BUFFER
+                sizeof(DrawArraysIndirectCommand) // relative offset in the GL_DRAW_INDIRECT_BUFFER between command structures
+            );
+            err_checkGL("Drawing Triangle via glDrawArraysIndirect");
+            drawMethod = DrawMethods::DrawElements;
+            break;
+        case DrawMethods::DrawElements:
+            glBindVertexArray(VertexArrayID);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
+            glDrawElements(
+                GL_TRIANGLES,      // type of primitive to render
+                3,                 // vertex count
+                GL_UNSIGNED_INT,   // type of each index in the GL_ELEMENT_ARRAY_BUFFER
+                (void*)0           // element array buffer offset
+                );
+            err_checkGL("Drawing Triangle via glDrawArraysIndirect");
+            drawMethod = DrawMethods::DrawElementsInstanced;
+            break;
+        case DrawMethods::DrawElementsInstanced:
+            glBindVertexArray(VertexArrayID);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
+            glDrawElementsInstanced(
+                GL_TRIANGLES,      // type of primitive to render
+                3,                 // vertex count
+                GL_UNSIGNED_INT,   // type of each index in the GL_ELEMENT_ARRAY_BUFFER
+                (void*)0,          // element array buffer offset
+                1                  // Number of copies to render
+                );
+            err_checkGL("Drawing Triangle via glDrawArraysIndirect");
+            drawMethod = DrawMethods::DrawElementsInstancedBaseVertex;
+            break;
+        case DrawMethods::DrawElementsInstancedBaseVertex:
+            glBindVertexArray(VertexArrayID);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
+            glDrawElementsInstancedBaseVertex(
+                GL_TRIANGLES,      // type of primitive to render
+                3,                 // vertex count
+                GL_UNSIGNED_INT,   // type of each index in the GL_ELEMENT_ARRAY_BUFFER
+                (void*)0,          // element array buffer offset
+                1,                 // Number of copies to render
+                0                  // Specifies a constant that should be added to each element of indices when chosing elements from the enabled vertex arrays
+                );
+            err_checkGL("Drawing Triangle via glDrawArraysIndirect");
+            drawMethod = DrawMethods::DrawElementsInstancedBaseInstance;
+            break;
+        case DrawMethods::DrawElementsInstancedBaseInstance:
+            glBindVertexArray(VertexArrayID);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
+            glDrawElementsInstancedBaseInstance(
+                GL_TRIANGLES,      // type of primitive to render
+                3,                 // vertex count
+                GL_UNSIGNED_INT,   // type of each index in the GL_ELEMENT_ARRAY_BUFFER
+                (void*)0,          // element array buffer offset
+                1,                 // Number of copies to render
+                0                  // Number to start from for InstanceId
+                );
+            err_checkGL("Drawing Triangle via glDrawArraysIndirect");
+            drawMethod = DrawMethods::DrawElementsInstancedBaseVertexBaseInstance;
+            break;
+        case DrawMethods::DrawElementsInstancedBaseVertexBaseInstance:
+            glBindVertexArray(VertexArrayID);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
+            glDrawElementsInstancedBaseVertexBaseInstance(
+                GL_TRIANGLES,      // type of primitive to render
+                3,                 // vertex count
+                GL_UNSIGNED_INT,   // type
+                (void*)0,          // element array buffer offset
+                1,                 // Number of copies to render
+                0,                 // Specifies a constant that should be added to each element of indices when chosing elements from the enabled vertex arrays
+                0                  // Number to start from for InstanceId
+                );
+            err_checkGL("Drawing Triangle via glDrawArraysIndirect");
+            drawMethod = DrawMethods::DrawElementsIndirect;
+            break;
+        case DrawMethods::DrawElementsIndirect:
+            glBindVertexArray(VertexArrayID);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
+            glBindBuffer(GL_DRAW_INDIRECT_BUFFER, elementCommandBuffer);
+            glDrawElementsIndirect(
+                GL_TRIANGLES,    // type of primitive to render
+                GL_UNSIGNED_INT, // data type in the GL_ELEMENT_ARRAY_BUFFER
+                0                // offset in the GL_DRAW_INDIRECT_BUFFER to start at
+            );
+            err_checkGL("Drawing Triangle via glDrawArraysIndirect");
+            drawMethod = DrawMethods::MultiDrawElementsIndirect;
+            break;
+        case DrawMethods::MultiDrawElementsIndirect:
+            glBindVertexArray(VertexArrayID);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
+            glBindBuffer(GL_DRAW_INDIRECT_BUFFER, elementCommandBuffer);
+            glMultiDrawElementsIndirect(
+                GL_TRIANGLES,                        // type of primitive to render
+                GL_UNSIGNED_INT,                     // data type in the GL_ELEMENT_ARRAY_BUFFER
+                0,                                   // offset in the GL_DRAW_INDIRECT_BUFFER to start at
+                1,                                   // how many commands to draw from the GL_DRAW_INDIRECT_BUFFER
+                sizeof(DrawElementsIndirectCommand)  // relative offset in the GL_DRAW_INDIRECT_BUFFER between command structures
+            );
+            err_checkGL("Drawing Triangle via glDrawArraysIndirect");
+            drawMethod = DrawMethods::DrawRangeElements;
+            break;
+        case DrawMethods::DrawRangeElements:
+            glBindVertexArray(VertexArrayID);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
+            glDrawRangeElements(
+                GL_TRIANGLES,      // type of primitive to render
+                0,                 // base index in the element buffer
+                3,                 // max index in the element buffer
+                3,                 // vertex count
+                GL_UNSIGNED_INT,   // type of each index in the GL_ELEMENT_ARRAY_BUFFER
+                (void*)0           // element array buffer offset
+                );
+            err_checkGL("Drawing Triangle via glDrawArraysIndirect");
+            drawMethod = DrawMethods::DrawRangeElementsBaseVertex;
+            break;
+        case DrawMethods::DrawRangeElementsBaseVertex:
+            glBindVertexArray(VertexArrayID);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
+            glDrawRangeElementsBaseVertex(
+                GL_TRIANGLES,      // type of primitive to render
+                0,                 // base index in the element buffer
+                3,                 // max index in the element buffer
+                3,                 // vertex count
+                GL_UNSIGNED_INT,   // type of each index in the GL_ELEMENT_ARRAY_BUFFER
+                (void*)0,          // element array buffer offset
+                0                  // Specifies a constant that should be added to each element of indices when chosing elements from the enabled vertex arrays
+                );
             err_checkGL("Drawing Triangle via glDrawArraysIndirect");
             drawMethod = DrawMethods::MAX;
             break;
