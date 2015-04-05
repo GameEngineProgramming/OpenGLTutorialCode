@@ -89,10 +89,10 @@ int main(int, char**)
     glVertexArrayVertexBuffer(VertexArrayID, 0, vertexbuffer, 0 /* offset */, 3 * sizeof(GLfloat) /* stride */);
     err_checkGL("Loading Triangle");
 
-    DrawArraysIndirectCommand indirectCommand = {
+    static const DrawArraysIndirectCommand indirectCommand = {
+        3, // Three vertices in total, making one triangle
         1, // Draw one copy of this triangle
         0, // Starting vertex index
-        3, // Three vertices in total, making one triangle
         0  // Starting instance index
     }; // same parameters as glDrawArraysInstancedBaseInstance
     assert(sizeof(DrawArraysIndirectCommand) == 16);
