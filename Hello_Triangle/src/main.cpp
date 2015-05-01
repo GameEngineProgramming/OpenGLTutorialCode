@@ -1,11 +1,14 @@
 #include <memory>
 #include <signal.h>
 #include <stdio.h>
+#include <ctime>
 
 #include <GL/glew.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <SDL.h>
+
+using namespace glm;
 
 #include "ErrorHandling.h"
 #include "ShaderLoader.h"
@@ -60,6 +63,9 @@ int main(int, char**)
     
     SDL_GL_MakeCurrent(window.get(), context.get());
     err_checkSDL("Unable to set the current OpenGL context");
+
+    SDL_SetRelativeMouseMode(SDL_TRUE);
+    err_checkSDL("Unable to set relative mouse mode");
 
     glewExperimental = true; // Needed in core profile 
     GLenum glerr = glewInit();
@@ -120,14 +126,97 @@ int main(int, char**)
     err_checkGL("Loading Command Buffer");
 
     GLuint programID = LoadShaderProgramFile("basic.frag", "basic.vert");
+    // Get a handle for our "MVP" uniform.
+    GLuint MatrixID = glGetUniformLocation(programID, "MVP");
+
+    // Model matrix : an identity matrix (model will be at the origin)
+    mat4 Model = translate(mat4(1.0), vec3(2, 0, 0)) * rotate(mat4(1.0), 3.14f / 2, vec3(0, 0, 1)) * scale(mat4(1.0), vec3(0.5, 0.5, 0.5));  // Changes for each model !
+
+    // position
+    vec3 position = glm::vec3(0, 0, 5);
+    // horizontal angle : toward -Z
+    float horizontalAngle = 3.14f;
+    // vertical angle : 0, look at the horizon
+    float verticalAngle = 0.0f;
+    // Initial Field of View
+    float initialFoV = 45.0f;
+
+    float speed = 3.0f; // 3 units / second
+    float mouseSpeed = 0.1f;
+
+    // Camera matrix
+    mat4 View = lookAt(
+        position,
+        glm::vec3(0, 0, 0), // and looks at the origin
+        glm::vec3(0, 1, 0)  // Head is up (set to 0,-1,0 to look upside-down)
+        );
+
+    // Projection matrix : 45° Field of View, 4:3 ratio, display range : 0.1 unit <-> 100 units
+    // Generates a really hard-to-read matrix, but a normal, standard 4x4 matrix nonetheless
+    mat4 Projection = perspective(
+        3.14f / 4,   // The horizontal Field of View, in degrees : the amount of "zoom". Think "camera lens". Usually between 90° (extra wide) and 30° (quite zoomed in)
+        4.0f / 3.0f, // Aspect Ratio. Depends on the size of your window. Notice that 4/3 == 800/600 == 1280/960, sounds familiar ?
+        0.1f,        // Near clipping plane. Keep as big as possible, or you'll get precision issues.
+        100.0f       // Far clipping plane. Keep as little as possible.
+        );
 
     SDL_Event event;
+    clock_t lastCall = clock();
+    bool upKey = 0, downKey = 0, leftKey = 0, rightKey = 0;
     bool done = false;
     while(!done)
     {
+        // Frame timer stuff
+        clock_t thisCall = clock();
+        float deltaTime = ((float)(thisCall - lastCall)) / (float)CLOCKS_PER_SEC;
+        lastCall = thisCall;
+
+        // Direction : Spherical coordinates to Cartesian coordinates conversion
+        glm::vec3 direction(
+            cos(verticalAngle) * sin(horizontalAngle),
+            sin(verticalAngle),
+            cos(verticalAngle) * cos(horizontalAngle)
+            );
+
+        float componentSpeed = (float)((upKey || downKey) && (leftKey || rightKey) ? speed / sqrt(2) : speed);
+
+        if (downKey) position -= direction * componentSpeed * deltaTime;
+        if (upKey) position += direction * componentSpeed * deltaTime;
+
+        vec3 right = vec3(
+            sin(horizontalAngle - 3.14f / 2.0f),
+            0,
+            cos(horizontalAngle - 3.14f / 2.0f)
+            );
+
+        if (leftKey) position -= right * componentSpeed * deltaTime;
+        if (rightKey) position += right * componentSpeed * deltaTime;
+
+        // Up is both perpendicular to direction and right
+        vec3 up = cross(right, direction);
+
+        Projection = perspective(
+            3.14f / 4,  // Field of view
+            4.0f / 3.0f,// Aspect ratio
+            0.1f,       // Near-Plane clipping distance
+            100.0f      // Far-Plane clipping distance
+        );
+
+        // View/Camera matrix
+        View = glm::lookAt(
+            position,           // Camera is here
+            position + direction, // and looks here : at the same position, plus "direction"
+            up                  // Head is up (set to 0,-1,0 to look upside-down)
+            );
+
+        // Make our Model View Projection matrix
+        mat4 MVP = Projection * View * Model;
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(programID);
+        // Send our transformation to the currently bound shader
+        glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
 
         glBindVertexArray(VertexArrayID);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
@@ -143,18 +232,43 @@ int main(int, char**)
 
         SDL_GL_SwapWindow(window.get());
 
-        while(SDL_PollEvent(&event))
+        while (SDL_PollEvent(&event))
         {
-            switch(event.type)
+            switch (event.type)
             {
             case SDL_KEYDOWN:
-                switch(event.key.keysym.sym)
+            case SDL_KEYUP:
+                switch (event.key.keysym.sym)
                 {
                 case SDLK_ESCAPE:
                     done = true;
                     break;
+                case SDLK_a:
+                case SDLK_LEFT:
+                    leftKey = event.type == SDL_KEYDOWN;
+                    break;
+                case SDLK_d:
+                case SDLK_RIGHT:
+                    rightKey = event.type == SDL_KEYDOWN;
+                    break;
+                case SDLK_w:
+                case SDLK_UP:
+                    upKey = event.type == SDL_KEYDOWN;
+                    break;
+                case SDLK_s:
+                case SDLK_DOWN:
+                    downKey = event.type == SDL_KEYDOWN;
+                    break;
                 default: break;
                 }
+                break;
+            case SDL_MOUSEMOTION:
+                if (event.motion.xrel == event.motion.x && event.motion.yrel == event.motion.y) break;
+
+                // change the direction based on mouse movement
+                horizontalAngle -= mouseSpeed * deltaTime * event.motion.xrel;
+                verticalAngle -= mouseSpeed * deltaTime * event.motion.yrel;
+                break;
             case SDL_QUIT:
                 done = true;
                 break;
