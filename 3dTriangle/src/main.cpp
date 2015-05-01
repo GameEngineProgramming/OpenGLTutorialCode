@@ -48,7 +48,7 @@ int main(int, char**)
     SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
 
     std::unique_ptr<SDL_Window, void(*)(SDL_Window *)> window(
-        SDL_CreateWindow("3d Triangle", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL),
+        SDL_CreateWindow("Hello Triangle!", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL),
         SDL_DestroyWindow);
     err_checkSDL("Unable to open SDL window");
 
